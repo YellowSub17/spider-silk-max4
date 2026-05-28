@@ -6,65 +6,57 @@ import numpy as np
 class ScanPlot:
 
 
-    def plot_iq(self, logI=False, logq=False, errs=False):
-        ## todo: add option to plot either or both the detectors
-        self._plot(self.qs, self.Is)
+    def plot_iq(self, errs=False, logX=None,logY=None, xlim=None):            
+        self._plot(self.qs, self.Is, logX=logX,logY=logY,xlim=xlim)
+       
+
+    def plot_iq_errs(self,logX=None,logY=None, xlim=None):
+        self._plot(self.qs, self.Is, self.Is_err, logX=logX,logY=logY,xlim=xlim)
+
+    
+
+    def _plot(self, x, ys, yerrs=None, new_fig=True, logX=None, logY=None, cmap='viridis', xlim=None):
+        if new_fig:
+            plt.figure()
         
-        #if errs:
-        #    plot_fn = plt.errorbars
-        #else:
-        #    plot_fn = plt.plot
-
-        #cmap = plt.cm.get_cmap('viridis', self.n_ims)
-        #plt.figure()
-        #q = self.qs[:]
-        #if logq:
-        #    q = np.log10(q)
-        #for i in range(self.n_ims):
-        #    I = self.Is[i,:]
-        #    if logI:
-        #        I=np.log10(I)
-        #    plt.plot(q, I, color=cmap(i))
-        #    
-        #plt.xlabel('q [1/A]')
-        #plt.ylabel('Inten.')
-
-    def plot_iq_errs(self):
-        ## todo: add option to plot either or both the detectors
-
-        self._plot(self.qs, self.Is, self.Is_err)
-        #cmap = plt.cm.get_cmap('viridis', self.n_ims)
-        ##plt.figure()
-        #for i in range(self.n_ims):
-        #    plt.errorbar(self.qs, self.Is[i,:], self.Is_err[i,:], capsize=1, linestyle='', color=cmap(i))
-
-        
-
-
-
-    def _plot(self, x, ys, yerrs=None, new_fig=True, logX=False, logY=True, cmap='viridis'):
-        if new_fig: plt.figure()
-
         if yerrs is None:
             yerrs = np.zeros(ys.shape)
+            
+        if self.det=='eiger':
+            if xlim is None:
+                plt.xlim([3e-3, 3e-1])
+            if logX is None: 
+                logX = True
+            if logY is None: 
+                logY = True
+                
+        if self.det=='pilatus':
+            if xlim is None:
+                plt.xlim([1e-1, 2.125])
+            if logX is None: 
+                logX = False
+            if logY is None: 
+                logY = True
+                
+
+        
+            
+        #else:
+            
+            
+        
 
         cmap = plt.cm.get_cmap('viridis', ys.shape[0])
         for i, (y, yerr) in enumerate(zip(ys, yerrs)):
             plt.errorbar(x, y, yerr=yerr, color=cmap(i))
 
-        
-        
         plt.xlabel('q [1/A]')
         plt.ylabel('Inten.')
         
         if logX: plt.xscale('log')
         if logY: plt.yscale('log')
             
-        
-
-
-
-    #plt.errorbar(q,I, yerr=errors, capsize=1, linestyle='')
+    
     
     def plot_img(self, i=0, log=False, xlim=None, ylim=None):
         if i is None:
