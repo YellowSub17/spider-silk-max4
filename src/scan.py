@@ -25,17 +25,6 @@ class Scan(ScanPlot):
         self.raw_pcap_path = f"{DATA_PATH}/raw/scan-{self.scan_id}_pcap.h5"
         self.azint_path = f"{DATA_PATH}/process/azint/scan-{self.scan_id}_{self.det}_integrated.h5"
         
-
-
-        #### this only works if the scan was made with the dscan cmd
-        #with h5py.File(self.raw_path,'r') as f:
-            #self.sample_x = f['/entry/instrument/sams4_x/value'][...]
-            #self.n_ims = self.sample_x.size
-        
-
-        #with h5py.File(self.raw_det_path,'r') as f:
-            #self.eiger_count_time = f['/entry/instrument/eiger/count_time/'][...]
-            
         
         with h5py.File(self.azint_path,'r') as f:
             self.poni_str = f['/entry/reduction/input/poni'][...].item().decode("utf-8")
@@ -49,6 +38,9 @@ class Scan(ScanPlot):
             
         with h5py.File(self.raw_path,'r') as f:
             self.n_ims = f[f'/entry/instrument/{self.det}/data/'][...].shape[0]
+
+    def normalize(self, qrange=()):
+        pass
             
 
 

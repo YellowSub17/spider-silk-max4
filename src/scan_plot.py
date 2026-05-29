@@ -2,6 +2,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+from .const import EIGER_QRANGE, PILATUS_QRANGE
 
 class ScanPlot:
 
@@ -16,34 +17,15 @@ class ScanPlot:
     
 
     def _plot(self, x, ys, yerrs=None, new_fig=True, logX=None, logY=None, cmap='viridis', xlim=None):
+        
         if new_fig:
             plt.figure()
-        
+    
         if yerrs is None:
             yerrs = np.zeros(ys.shape)
             
-        if self.det=='eiger':
-            if xlim is None:
-                plt.xlim([3e-3, 3e-1])
-            if logX is None: 
-                logX = True
-            if logY is None: 
-                logY = True
-                
-        if self.det=='pilatus':
-            if xlim is None:
-                plt.xlim([1e-1, 2.125])
-            if logX is None: 
-                logX = False
-            if logY is None: 
-                logY = True
-                
-
         
-            
-        #else:
-            
-            
+                
         
 
         cmap = plt.cm.get_cmap('viridis', ys.shape[0])
@@ -52,6 +34,22 @@ class ScanPlot:
 
         plt.xlabel('q [1/A]')
         plt.ylabel('Inten.')
+        if self.det=='eiger':
+            if xlim is None:
+                plt.xlim(EIGER_QRANGE)
+            if logX is None: 
+                logX = True
+            if logY is None: 
+                logY = True
+                
+        if self.det=='pilatus':
+            if xlim is None:
+                plt.xlim(PILATUS_QRANGE)
+            if logX is None: 
+                logX = False
+            if logY is None: 
+                logY = True
+        
         
         if logX: plt.xscale('log')
         if logY: plt.yscale('log')
@@ -59,6 +57,7 @@ class ScanPlot:
     
     
     def plot_img(self, i=0, log=False, xlim=None, ylim=None):
+        
         if i is None:
             img = np.mean(self.get_imgs(), axis=0)
         else:
