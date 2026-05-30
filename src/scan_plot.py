@@ -7,30 +7,31 @@ from .const import EIGER_QRANGE, PILATUS_QRANGE
 class ScanPlot:
 
 
-    def plot_iq(self, errs=False, logX=None,logY=None, xlim=None):            
-        self._plot(self.qs, self.Is, logX=logX,logY=logY,xlim=xlim)
+    def plot_iq(self, errs=False, logX=None,logY=None, xlim=None, new_fig=True, mask=None):            
+        self._plot(self.qs, self.Is, logX=logX,logY=logY,xlim=xlim,new_fig=new_fig, mask=mask)
        
 
-    def plot_iq_errs(self,logX=None,logY=None, xlim=None):
-        self._plot(self.qs, self.Is, self.Is_err, logX=logX,logY=logY,xlim=xlim)
+    def plot_iq_errs(self,logX=None,logY=None, xlim=None,new_fig=True):
+        self._plot(self.qs, self.Is, self.Is_err, logX=logX,logY=logY,xlim=xlim,new_fig=new_fig, mask=None)
 
     
 
-    def _plot(self, x, ys, yerrs=None, new_fig=True, logX=None, logY=None, cmap='viridis', xlim=None):
+    def _plot(self, x, ys, yerrs=None, new_fig=True, logX=None, logY=None, cmap='viridis', xlim=None, mask=None):
         
         if new_fig:
             plt.figure()
     
         if yerrs is None:
             yerrs = np.zeros(ys.shape)
-            
-        
-                
+
+        if mask is None:
+            mask = np.array([True]*ys.shape[0])
         
 
         cmap = plt.cm.get_cmap('viridis', ys.shape[0])
-        for i, (y, yerr) in enumerate(zip(ys, yerrs)):
-            plt.errorbar(x, y, yerr=yerr, color=cmap(i))
+        for i, (y, yerr, mask_val) in enumerate(zip(ys, yerrs, mask)):
+            if mask_val:
+                plt.errorbar(x, y, yerr=yerr, color=cmap(i))
 
         plt.xlabel('q [1/A]')
         plt.ylabel('Inten.')
@@ -55,13 +56,17 @@ class ScanPlot:
         if logY: plt.yscale('log')
             
     
-    
-    def plot_img(self, i=0, log=False, xlim=None, ylim=None):
+    def plot_img(self, i=0, log=False, xlim=None, ylim=None, vmin=None, vmax=None):
+
+        if self.imgs is None:
+            return
         
-        if i is None:
-            img = np.mean(self.get_imgs(), axis=0)
+        if i == 'mean':
+            img = self.img_mean
+        elif i== 'std':
+            img = self.img_std
         else:
-            img = self.get_imgs()[i]
+            img = self.imgs[i]
 
         if log:
             img=np.log10(img)
@@ -74,7 +79,7 @@ class ScanPlot:
         ]
         
         plt.figure()
-        plt.imshow(img, extent=extent_centered,cmap='viridis')
+        plt.imshow(img, extent=extent_centered,cmap='viridis', clim=(vmin,vmax))
         plt.colorbar()
         plt.scatter(0,0,marker='+', color='red')
         if xlim is None:
@@ -83,3 +88,5 @@ class ScanPlot:
         if ylim is None:
             ylim = [0 - self.det_center[0],img.shape[0]*self.det_px - self.det_center[0]]
             plt.ylim(ylim)
+        
+    

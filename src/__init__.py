@@ -2,4 +2,4 @@
 
 
 from .scan import Scan
-from .comboscan import ComboScan
+from .combo_scan import ComboScan
