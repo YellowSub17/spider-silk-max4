@@ -5,6 +5,7 @@
 PROP_ID = 20251747
 DATA_PATH = f'/data/visitors/cosaxs/{PROP_ID}/2026052808'
 PHOTON_ENERGY = 12400.0
+DET_D = 2499.90 #Taken from SAXS_Z from metadata files. I think this refers to the Eiger distance?
 PILATUS_PX = 0.00017199999999999998
 EIGER_PX = 0.000075
 PILATUS_SHAPE = [1475, 1679]
