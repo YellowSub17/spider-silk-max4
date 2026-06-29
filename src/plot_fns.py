@@ -6,74 +6,90 @@ from . import const
 
     
 
-def plot_iq(self, yerrs=None, xlim=None, ylim=None, logX=None, logY=None, **kwargs):
-    if self.det=='eiger':
-        if xlim is None:
-            xlim = const.EIGER_QRANGE
-        if logX is None: 
-            logX = True
-        if logY is None: 
-            logY = True
-        
-    if self.det=='pilatus':
-        if xlim is None:
-            xlim = const.PILATUS_QRANGE
-        if logX is None: 
-            logX = False
-        if logY is None: 
-            logY = True
-            
-    if yerrs is not None:
-        yerrs = self.Is_err
+def plot_iq(self, i=0, axes=None, color='red', yerr=None, xlim=None,logX=True, logY=True, **kwargs):
     
-    _plot_1d(self.qs, self.Is, yerrs=yerrs, xlim=xlim, ylim=ylim, logX=logX, logY=logY, **kwargs)
-
-
-
-
-def _plot_1d(x, ys, yerrs=None, new_fig=True, logX=None, logY=None, cmap='viridis', xlim=None, ylim=None, mask=None):
     
-    if new_fig:
+    if axes is None:
         plt.figure()
+        axes = plt.gca()
 
-    if yerrs is None:
-        yerrs = np.zeros(ys.shape)
+    if yerr is None:
+        yerr = np.zeros(self.qs.shape)
 
-    if mask is None:
-        mask = np.array([True]*ys.shape[0])
+    
+    
+    axes.errorbar(self.qs, self.Is[i], yerr=yerr, color=color,**kwargs)
+          
+    axes.set_xlabel('q [1/A]')
+    axes.set_ylabel('Inten.')
+    
+    if logX: axes.set_xscale('log')
+    if logY: axes.set_yscale('log')
 
-    if type(cmap) is str:
-        cmap = plt.cm.get_cmap(cmap, ys.shape[0])
+    if xlim is None:
+        xlim = self.det.qrange
+    axes.set_xlim(xlim)
+   
+
+
+
+def plot_iqs(self, axes=None, cmap='viridis', xlim=None, ylim=None, logX=True, logY=True, color=None, **kwargs):
+
+    if axes is None:
+        plt.figure()
+        axes = plt.gca()
+
+
+
+    if cmap is not None:
+        cmap = plt.colormaps.get_cmap(cmap)
+    else:
+        def cmap(x):
+            return color
+
+    for i in range(self.n_ims):
+        axes.plot(self.qs, self.Is[i], color=cmap(i / (self.n_ims - 1)), **kwargs)
+
+    axes.set_xlabel('q [1/A]')
+    axes.set_ylabel('Inten.')
+    
+    if logX: axes.set_xscale('log')
+    if logY: axes.set_yscale('log')
+
+    if xlim is None:
+        xlim = self.det.qrange
+    axes.set_xlim(xlim)
+
+
+
     
         
-    for i, (y, yerr, mask_val) in enumerate(zip(ys, yerrs, mask)):
-        if mask_val:
-            plt.errorbar(x, y, yerr=yerr, color=cmap(i), label=i)
-    plt.xlabel('q [1/A]')
-    plt.ylabel('Inten.')
-    
-    if logX: plt.xscale('log')
-    if logY: plt.yscale('log')
-    if xlim is not None: plt.xlim(xlim)
-    if ylim is not None: plt.ylim(ylim)
-        
 
-def _plot_2d(img, log=False, vmin=None, vmax=None, det_center=(0,0), det_px = 1):
 
+
+def plot_img(self, i=0, log=False, vmin=None, vmax=None, mask=True):
+    img = self.imgs[i].astype(float)
+    print(img.dtype)
     if log:
-        img=np.log10(np.abs(img)+1)
-        
+        img = np.log10(np.abs(img)+1)
+    if mask:
+        img[~self.det.mask] = np.nan
 
-    xmin =  - det_center[1] 
-    xmax = img.shape[1]*det_px - det_center[1]
-    ymin = - det_center[0]
-    ymax = img.shape[0]*det_px - det_center[0]
-    extent_centered = [xmin, xmax, ymin, ymax]
-    
+    extent_centered = [self.det.xrange[0], self.det.xrange[1], self.det.yrange[0], self.det.yrange[1]]
     plt.figure()
     plt.imshow(img, extent=extent_centered, cmap='viridis', clim=(vmin,vmax), origin='lower')
     plt.colorbar()
     plt.scatter(0,0,marker='+', color='red')
+
     
+    
+    
+    
+    
+    
+    
+
+
+
     
     

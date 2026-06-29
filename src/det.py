@@ -15,6 +15,7 @@ class Detector:
         self.qrange = qrange
         self.xrange = ( -center[1], shape[1]*px - center[1])
         self.yrange = ( -center[0], shape[0]*px - center[0])
+        
 
 
         x_array = np.linspace(self.xrange[0],self.xrange[1], num=self.shape[1])
@@ -25,7 +26,13 @@ class Detector:
         
         self.img_r = np.sqrt( self.img_x**2 + self.img_y**2)
         self.img_q = ((4*np.pi)/const.PHOTON_LAMBDA)*np.sin(0.5*np.arctan2(self.img_r, self.clen))/1e10
-        self.img_mask = np.load(f'{const.DATA_PATH}/{self.name}_mask.npy')
+        
+        self.det_mask =  (np.load(f'{const.DATA_PATH}/{self.name}_mask.npy')==1)
+        
+        self.q_mask = (self.img_q >= self.qrange[0]) & ( self.img_q <= self.qrange[1])
+
+        self.mask = self.det_mask & self.q_mask
+        
         
 
 PILATUS_PX = 0.000172
@@ -39,9 +46,6 @@ EIGER_SHAPE = (2162, 2068)
 EIGER_CENTER = (0.0734895634276946, 0.007149631494855128)
 EIGER_CLEN = 3.4320383606449973
 EIGER_QRANGE = [3.1e-3, 3e-1]
-
-
-
 
         
 

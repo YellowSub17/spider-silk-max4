@@ -4,7 +4,8 @@
 
 from .scan import Scan
 from . import const
-from . import utils
+from . import plot_fns
+from . import scale_fns
 
 import numpy as np
 import h5py
@@ -14,18 +15,11 @@ import h5py
 class ComboScan:
 
 
-    def __init__(self, scan_ids, det='pilatus', load_imgs=False, load_n='all'):
+    def __init__(self, scan_ids, det, load_imgs=False, load_n=1):
         
 
         self.scan_ids = scan_ids
-        assert det in ['pilatus', 'eiger', 'saxs', 'waxs', 'sax', 'wax', 's', 'w'], f'det must be one of pilatus, eiger, saxs, waxs, sax or wax. {det=}'
-        if det in ['saxs', 'sax', 'eiger', 's']:
-            self.det = 'eiger'
-        else:
-            self.det = 'pilatus'
-            
-        self.det_px = const.PILATUS_PX if self.det=='pilatus' else const.EIGER_PX
-        self.det_shape = const.PILATUS_SHAPE if self.det=='pilatus' else const.EIGER_SHAPE
+        self.det = det
         
         
         self.scans = []
@@ -43,10 +37,6 @@ class ComboScan:
         self.azint_paths = list(map(lambda scan: scan.azint_path, self.scans))
 
 
-        self.poni_str = self.scans[0].poni_str
-        self.det_center = self.scans[0].det_center
-        self.det_d = self.scans[0].det_d
-        self.det_lam = self.scans[0].det_lam
         self.qs = self.scans[0].qs[:]
         self.dq = self.scans[0].dq
 
@@ -67,24 +57,34 @@ class ComboScan:
         self.imgs =None
         if load_imgs:
             self.load_imgs()
-            
-
-
-
-    def plot_iq(self, **kwargs):
-        plot_fns.plot_iq(self, **kwargs)
-
-    def plot_img(self, i=0, **kwargs):
-        plot_fns._plot_2d(self.imgs[i], det_center=self.det_center,det_px = self.det_px, **kwargs)
         
-            
     def load_imgs(self):
         imgs = []
-        for scan in self.scans:
+        for i, scan in enumerate(self.scans):
+            print(f'Loading images for ComboScan:\t{i+1}/{len(self.scan_ids)}', end='\r')
             scan.load_imgs()
             imgs.append(scan.imgs)
+        print('\nDone')
         self.imgs = np.concatenate(imgs, axis=0)
-        plot_fns.make_img_stats(self)
+        self.img_mean = self.imgs.mean(axis=0)
+        self.img_std = self.imgs.std(axis=0)
+        
+            
+    
+    def plot_img(self,i=0, **kwargs):
+        return plot_fns.plot_img(self,i=i,**kwargs)
+
+    def plot_iq(self, i=0, **kwargs):
+        return plot_fns.plot_iq(self, i=i,**kwargs)
+
+    def plot_iqs(self,**kwargs):
+        return plot_fns.plot_iqs(self, **kwargs)
+
+    def norm_qrange(self, qmin=0, qmax=1e3):
+        return scale_fns.norm_qrange(self, qmin=qmin, qmax=qmax)
+    
+    
+
         
 
         

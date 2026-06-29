@@ -7,27 +7,19 @@ import hdf5plugin
 #from . import scan_plot 
 
 from . import const
-from . import utils
+
 from . import plot_fns
+from . import scale_fns
 
 from .det import pilatus_det, eiger_det
 
 class Scan:
 
-    def __init__(self, scan_id=102470, det='pilatus', load_imgs=True, load_n=1):
+    def __init__(self, scan_id=102470, det=pilatus_det, load_imgs=True, load_n=1):
         
 
         self.scan_id = scan_id
-        if type(det) == str:
-            
-        
-            assert det in ['pilatus', 'eiger', 'saxs', 'waxs', 'sax', 'wax', 's', 'w'], f'det must be one of pilatus, eiger, saxs, waxs, sax or wax. {det=}'
-            if det in ['saxs', 'sax', 'eiger', 's']:
-                self.det = eiger_det
-            else:
-                self.det = pilatus_det
-        else:
-            self.det = det
+        self.det = det
 
         self.raw_path = f"{const.DATA_PATH}/raw/scan-{self.scan_id}.h5"
         self.raw_det_path = f"{const.DATA_PATH}/raw/scan-{self.scan_id}_{self.det.name}.h5"
@@ -78,32 +70,30 @@ class Scan:
             return
         with h5py.File(self.raw_path,'r') as f:
             self.imgs = f[f'/entry/instrument/{self.det.name}/data/'][0:self.n_ims,...]
-        
         self.img_mean = self.imgs.mean(axis=0)
         self.img_std = self.imgs.std(axis=0)
     
-  
+    def plot_img(self,i=0, **kwargs):
+        return plot_fns.plot_img(self,i=i,**kwargs)
+
+    def plot_iq(self, i=0, **kwargs):
+        return plot_fns.plot_iq(self, i=i,**kwargs)
+
+    def plot_iqs(self,**kwargs):
+        return plot_fns.plot_iqs(self, **kwargs)
 
 
     
+    def norm_qrange(self, qmin=0, qmax=1e3):
+        return scale_fns.norm_qrange(self, qmin=qmin, qmax=qmax)
 
+    def norm_max(self, ):
+        return scale_fns.norm_max(self)
 
-
-
-
-    def plot_iq(self, **kwargs):
-        plot_fns.plot_iq(self, **kwargs)
     
-    def plot_img(self, i=0, **kwargs):
-        plot_fns._plot_2d(self.imgs[i], det_center=self.det_center, det_px = self.det_px, **kwargs)
-
-    def plot_mean_img(self, **kwargs):
-        plot_fns._plot_2d(self.img_mean, det_center=self.det_center,det_px = self.det_px, **kwargs)
-        
-    def plot_std_img(self,  **kwargs):
-        plot_fns._plot_2d(self.img_std, det_center=self.det_center,det_px = self.det_px, **kwargs)
-
-  
+    
+    
+    
 
     
 
