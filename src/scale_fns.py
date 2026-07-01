@@ -11,6 +11,8 @@ def norm_qrange(self, qmin=0, qmax=1e3):
 def norm_max(self):
     norm_sf = np.max(self.Is, axis=1)
     self.Is=self.Is/norm_sf.reshape(-1,1)
+
+ 
   
 
 def x(self):

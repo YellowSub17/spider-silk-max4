@@ -15,30 +15,30 @@ import h5py
 class ComboScan:
 
 
-    def __init__(self, scan_ids, det, load_imgs=False, load_n=1):
+    def __init__(self, scan_ids, load_imgs=False, load_n=1):
         
 
         self.scan_ids = scan_ids
-        self.det = det
+        #self.det = det
         
         
         self.scans = []
         for i, scan_id in enumerate(self.scan_ids):
             print(f'Loading Scans for ComboScan:\t{i+1}/{len(self.scan_ids)}', end='\r')
-            self.scans.append(Scan(scan_id, det=self.det, load_imgs=False, load_n=load_n))
+            self.scans.append(Scan(scan_id, load_imgs=False, load_n=load_n))
         print('\nDone.')
 
 
         
 
-        self.raw_paths = list(map(lambda scan: scan.raw_path, self.scans))
-        self.raw_det_paths = list(map(lambda scan: scan.raw_det_path, self.scans))
-        self.raw_pcap_paths = list(map(lambda scan: scan.raw_pcap_path, self.scans))
-        self.azint_paths = list(map(lambda scan: scan.azint_path, self.scans))
+        #self.raw_paths = list(map(lambda scan: scan.raw_path, self.scans))
+        #self.raw_det_paths = list(map(lambda scan: scan.raw_det_path, self.scans))
+        #self.raw_pcap_paths = list(map(lambda scan: scan.raw_pcap_path, self.scans))
+        #self.azint_paths = list(map(lambda scan: scan.azint_path, self.scans))
 
 
         self.qs = self.scans[0].qs[:]
-        self.dq = self.scans[0].dq
+        #self.dq = self.scans[0].dq
 
         
         self.Is = np.concatenate(list(map(lambda scan: scan.Is, self.scans)), axis=0)

@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from . import const
-
+from . import det
 
 
     
@@ -27,7 +27,7 @@ def plot_iq(self, i=0, axes=None, color='red', yerr=None, xlim=None,logX=True, l
     if logY: axes.set_yscale('log')
 
     if xlim is None:
-        xlim = self.det.qrange
+        xlim = [det.EIGER_QRANGE[0], det.PILATUS_QRANGE[1]]
     axes.set_xlim(xlim)
    
 
@@ -56,9 +56,11 @@ def plot_iqs(self, axes=None, cmap='viridis', xlim=None, ylim=None, logX=True, l
     if logX: axes.set_xscale('log')
     if logY: axes.set_yscale('log')
 
+    
     if xlim is None:
-        xlim = self.det.qrange
+        xlim = [det.EIGER_QRANGE[0], det.PILATUS_QRANGE[1]]
     axes.set_xlim(xlim)
+   
 
 
 
