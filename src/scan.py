@@ -147,8 +147,6 @@ class Scan:
 
 
 
-
-
         # initialise imgs varible to None, to say it hasn't been loaded
         self.imgs = None
         if load_imgs:
@@ -204,6 +202,9 @@ class Scan:
 
     def norm_max(self,):
         return scale_fns.norm_max(self)
+
+    def norm_i0(self,):
+        return scale_fns.norm_i0(self)
 
 
 

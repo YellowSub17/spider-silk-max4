@@ -13,6 +13,16 @@ def norm_max(self):
     self.Is=self.Is/norm_sf.reshape(-1,1)
 
 
+def norm_i0(self):
+    """
+    Normalize each frame by its incident flux (i0), independent of the
+    scattering curve's own shape/intensity. Unlike norm_qrange, this doesn't
+    assume any q-region is the same between groups being compared -- it's a
+    normalization based purely on beam intensity delivered to the sample.
+    """
+    self.Is = self.Is / self.i0.reshape(-1, 1)
+
+
 
 
 def x(self):

@@ -97,3 +97,14 @@ class ComboScan:
 
 
 
+    def norm_qrange(self, qmin=0, qmax=1e3):
+        return scale_fns.norm_qrange(self, qmin=qmin, qmax=qmax)
+
+    def norm_max(self,):
+        return scale_fns.norm_max(self)
+
+    def norm_i0(self,):
+        return scale_fns.norm_i0(self)
+
+
+
