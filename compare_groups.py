@@ -123,6 +123,24 @@ for _name, _raw in RAW_NAME.items():
     _blank_raw = find_blank(_raw, _scans_by_raw_sample)
     BLANK_OF[_name] = _sanitize(_blank_raw) if _blank_raw else None
 
+# Conditions dropped after drift_within_runs.py found them internally
+# self-inconsistent (early-vs-late relative RMSD, i0-normalized, no q-pinning):
+#   Y2F_kpi_kpi: 108.8% RMSD, total intensity swung +387% within 55 minutes
+#     (a real mid-run event -- clogging/aggregation/bubble -- not steady drift).
+#   resin: 46.6% RMSD over just 5 min/10 scans, a clean step-change between
+#     the first 3 scans and the rest (likely a beam/position shift mid-run).
+# Neither was usable as a background/reference anyway; both are excluded from
+# GROUPS (and everything downstream that iterates over it) entirely.
+DROPPED_CONDITIONS = {
+    "Y2F_kpi_kpi": "internally inconsistent (108.8% early/late RMSD, see drift_within_runs.py)",
+    "resin": "internally inconsistent (46.6% early/late RMSD, step-change mid-run)",
+}
+for _dropped in DROPPED_CONDITIONS:
+    GROUPS.pop(_dropped, None)
+    SAMPLE_INFO.pop(_dropped, None)
+    RAW_NAME.pop(_dropped, None)
+    BLANK_OF.pop(_dropped, None)
+
 
 # --- Groups worth comparing to each other ----------------------------------
 COMPARISONS = [
@@ -130,7 +148,9 @@ COMPARISONS = [
     ("Y2F vs YR2A in water", ["Y2F_h2o_h2o", "YR2A_h2o_h2o"]),
     ("Y2F vs YR2A in KPi", ["Y2F_h2o_kpi", "YR2A_h2o_kpi"]),
     ("Buffer-only controls", ["h2o_h2o", "kpi_h2o", "kpi_aa"]),
-    ("Acetic acid progression on Y2F", ["Y2F_kpi_kpi", "Y2F_kpi_aa", "kpi_aa"]),
+    # Y2F_kpi_kpi (the "no acid" baseline) was dropped -- see DROPPED_CONDITIONS
+    # -- so this is now just protein+KPi+acid vs the matched protein-free blank.
+    ("Y2F in KPi with vs without acid", ["Y2F_kpi_aa", "kpi_aa"]),
 ]
 
 RSQ_LIM = 0.999  # keep only frames with a clean log-log linear streak fit
@@ -218,6 +238,57 @@ def coeff_of_variation(qs, I_mean, I_std, qrange=None):
         qrange = src.det.FULL_QRANGE
     qloc = (qs >= qrange[0]) & (qs <= qrange[1]) & (I_mean > 0)
     return np.median(I_std[qloc] / I_mean[qloc])
+
+
+# Baseline windows for peak_analysis when applied to a *difference* curve
+# rather than a raw I(q) curve -- anchored close to the WAXS peak itself
+# rather than peak_analysis's raw-curve defaults, which land inside the
+# low-q Guinier-mismatch region on a difference curve and badly distort the
+# baseline (see protein_vs_buffer.py's module docstring for the history).
+DIFF_Q_BASE = ((0.5, 0.7), (1.5, 1.7))
+
+MIN_SCANS_FOR_DRIFT_CHECK = 20  # need enough scans in each half to be meaningful
+
+
+def drift_check(name, norm="i0", q_base=DIFF_Q_BASE):
+    """
+    Split a named group's scans into chronological early/late halves (scan ID
+    order is a good proxy for time order here) and run the same
+    scale-corrected WAXS-region peak analysis between them that
+    protein_vs_buffer.py uses for a protein-vs-blank comparison -- but with
+    NO protein or condition difference at all, just time.
+
+    Use this to sanity-check a protein-vs-blank result: if a condition's own
+    early-vs-late split produces a "peak" of comparable size to the claimed
+    protein signature, the run-to-run/session time gap between the protein
+    and blank measurements could be producing (or contributing to) that
+    signature by itself, rather than real protein structure.
+
+    Returns dict(scale, peak, n_early, n_late) or None if there aren't enough
+    scans in the group to split meaningfully (see MIN_SCANS_FOR_DRIFT_CHECK).
+    peak is whatever src.saxs_metrics.peak_analysis returns (or None).
+    """
+    ids = sorted(GROUPS[name])
+    if len(ids) < MIN_SCANS_FOR_DRIFT_CHECK:
+        return None
+    half = len(ids) // 2
+    early, late = ids[:half], ids[half:]
+
+    combo_e = load_scan_ids(early, label=f"{name} (early half, drift check)")
+    combo_l = load_scan_ids(late, label=f"{name} (late half, drift check)")
+    qs_e, Is_e, n_e, _ = kept_frames(combo_e, norm=norm)
+    qs_l, Is_l, n_l, _ = kept_frames(combo_l, norm=norm)
+    if n_e == 0 or n_l == 0:
+        return None
+    I_e, I_l = Is_e.mean(axis=0), Is_l.mean(axis=0)
+
+    mask = (qs_e >= Q_NEUTRAL[0]) & (qs_e <= Q_NEUTRAL[1])
+    denom = np.sum(I_e[mask] ** 2)
+    scale = np.sum(I_l[mask] * I_e[mask]) / denom if denom > 0 else np.nan
+
+    diff = I_l - scale * I_e
+    peak = src.saxs_metrics.peak_analysis(qs_e, diff, q_base=q_base)
+    return {"scale": scale, "peak": peak, "n_early": n_e, "n_late": n_l}
 
 
 def plot_comparison(title, group_names, out_dir="figures"):

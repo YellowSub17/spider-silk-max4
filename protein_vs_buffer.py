@@ -32,6 +32,17 @@ difference:
      the two groups (real or a normalization artifact) before looking for a
      *localized* WAXS peak, so a broad Porod-region mismatch can't masquerade
      as -- or mask -- a real structural peak.
+  7. Drift check (compare_groups.drift_check): the protein and blank runs are
+     often collected tens of minutes to hours apart (sometimes with other
+     conditions run in between), so an apparent "protein peak" could really
+     be session drift. This splits the *blank* condition's own scans into
+     chronological early/late halves and runs the identical scale-corrected
+     peak test between them -- i.e. the same analysis, with no protein and no
+     condition change at all, just time. If that alone produces a peak
+     that's a large fraction of the claimed protein-vs-blank peak, treat the
+     result with real suspicion (see the Y2F_kpi_h2o vs kpi_h2o case, where
+     an early/late split of kpi_h2o alone reproduced ~75% of the claimed
+     peak height).
 
 Run directly: `python protein_vs_buffer.py`
 Figures are written to ./figures/.
@@ -90,8 +101,9 @@ def fit_scale_factor(qs, I_p, I_b, q_range=Q_NEUTRAL):
 # dominated by leftover low-q Guinier mismatch (order 1-10 vs the ~1e-4 WAXS
 # signal), so the baseline interpolation across the peak window ends up wildly
 # sloped -- inflating (or hiding) the apparent peak area/significance. Anchor
-# to windows immediately flanking the WAXS peak(s) instead.
-DIFF_Q_BASE = ((0.5, 0.7), (1.5, 1.7))
+# to windows immediately flanking the WAXS peak(s) instead. (Shared with
+# compare_groups.drift_check, which uses the exact same peak test.)
+DIFF_Q_BASE = cg.DIFF_Q_BASE
 
 
 def resolve_peak(qs, diff, diff_err, q_base=DIFF_Q_BASE):
@@ -176,7 +188,7 @@ def analyze_pair(title, protein_name, blank_name, norm="linear_saxs", out_dir="f
     peak, peak_z, resolvable, peak_ok = res["peak"], res["peak_z"], res["resolvable"], res["ok"]
     rep_heights = np.array([])
     if resolvable:
-        rep_peaks = [src.saxs_metrics.peak_analysis(qs, row) for row in diff_reps]
+        rep_peaks = [src.saxs_metrics.peak_analysis(qs, row, q_base=DIFF_Q_BASE) for row in diff_reps]
         rep_heights = np.array([r["height"] for r in rep_peaks if r is not None])
 
     # --- 6. Scale-corrected peak significance --------------------------------------
@@ -193,7 +205,7 @@ def analyze_pair(title, protein_name, blank_name, norm="linear_saxs", out_dir="f
     )
     rep_heights_sc = np.array([])
     if resolvable_sc:
-        rep_peaks_sc = [src.saxs_metrics.peak_analysis(qs, row) for row in diff_reps_scaled]
+        rep_peaks_sc = [src.saxs_metrics.peak_analysis(qs, row, q_base=DIFF_Q_BASE) for row in diff_reps_scaled]
         rep_heights_sc = np.array([r["height"] for r in rep_peaks_sc if r is not None])
 
     # --- Plot ----------------------------------------------------------------
@@ -276,10 +288,43 @@ def analyze_pair(title, protein_name, blank_name, norm="linear_saxs", out_dir="f
                   f"[{rep_heights_sc.min():.3g}, {rep_heights_sc.max():.3g}] "
                   f"(mean={rep_heights_sc.mean():.3g}, n={rep_heights_sc.size} single-replicate diffs)")
 
+    # --- Drift check: is the blank_name condition's own early-vs-late split
+    # producing a peak of comparable size, from nothing but time/session
+    # drift? If so, the protein-vs-blank result above may be partly or
+    # entirely a time-gap artifact rather than real protein signal.
+    drift_frac = np.nan
+    drift = cg.drift_check(blank_name, norm=norm)
+    if drift is None:
+        print(f"  Drift check: skipped ('{blank_name}' has too few scans to split, "
+              f"need >= {cg.MIN_SCANS_FOR_DRIFT_CHECK})")
+    elif drift["peak"] is None or drift["peak"]["area"] <= 0:
+        print(f"  Drift check: no drift-only peak found in '{blank_name}' "
+              f"(early n={drift['n_early']}, late n={drift['n_late']}) {_flag(True)}")
+    else:
+        drift_height = drift["peak"]["height"]
+        # Compare against the scale-corrected peak, not the raw one -- the
+        # drift check's own diff is itself scale-corrected (early vs
+        # scale*late), so this is the apples-to-apples comparison.
+        ref_height = peak_sc["height"] if resolvable_sc else np.nan
+        drift_ok = True
+        if resolvable_sc and np.isfinite(ref_height) and ref_height > 0:
+            drift_frac = drift_height / ref_height
+            drift_ok = drift_frac < 0.5
+        print(f"  Drift check ('{blank_name}' early n={drift['n_early']} vs late "
+              f"n={drift['n_late']}, scale={drift['scale']:.3f}): "
+              f"drift-only peak height={drift_height:.3g}"
+              + (f", = {drift_frac:.0%} of the protein-vs-blank peak height ({ref_height:.3g})"
+                 if np.isfinite(drift_frac) else "")
+              + f" {_flag(drift_ok)}"
+              + ("" if drift_ok else
+                 " (drift alone produces a peak >=50% the size of the claimed effect -- "
+                 "treat the result above with caution)"))
+
     return {
         "norm": norm, "cv_p": cv_p, "cv_b": cv_b, "cv_ratio": cv_ratio,
         "scale": scale, "peak_z": peak_z, "resolvable": resolvable,
         "peak_z_scaled": peak_z_sc, "resolvable_scaled": resolvable_sc,
+        "drift_frac": drift_frac,
     }
 
 
@@ -297,14 +342,15 @@ def compare_normalizations(title, protein_name, blank_name):
 
     print(f"\n  == {title}: normalization comparison ==")
     header = (f"  {'method':<14}{'scale':>10}{'CV ratio':>12}"
-              f"{'peak sig.':>14}{'scale-corr. peak':>20}")
+              f"{'peak sig.':>14}{'scale-corr. peak':>20}{'drift %':>10}")
     print(header)
     for r in results:
         peak_str = f"{r['peak_z']:.1f} sigma" if r["resolvable"] and np.isfinite(r["peak_z"]) else "n/a"
         peak_sc_str = (f"{r['peak_z_scaled']:.1f} sigma"
                        if r["resolvable_scaled"] and np.isfinite(r["peak_z_scaled"]) else "n/a")
+        drift_str = f"{r['drift_frac']:.0%}" if np.isfinite(r["drift_frac"]) else "n/a"
         print(f"  {r['norm']:<14}{r['scale']:>10.3f}{r['cv_ratio']:>12.2f}"
-              f"{peak_str:>14}{peak_sc_str:>20}")
+              f"{peak_str:>14}{peak_sc_str:>20}{drift_str:>10}")
     return results
 
 

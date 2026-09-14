@@ -45,7 +45,13 @@ R2_FLAG = 0.95         # flag as "poor fit" below this
 
 # Y2F+KPi with no acid (baseline) -> Y2F+KPi+acid (expected LLPS) -> KPi+acid
 # alone, no protein (control for the acid/buffer background itself).
-ACID_PROGRESSION = ["Y2F_kpi_kpi", "Y2F_kpi_aa", "kpi_aa"]
+# Note: Y2F_kpi_kpi (the closest true "same buffer, no acid" baseline) was
+# dropped -- see compare_groups.DROPPED_CONDITIONS, it was internally
+# inconsistent (108.8% early/late RMSD). Y2F_h2o_kpi is used instead as the
+# no-acid reference; its channel1 is water rather than KPi, so this is no
+# longer a single-variable (acid only) progression -- treat the first step
+# as a rougher comparison than the other two.
+ACID_PROGRESSION = ["Y2F_h2o_kpi", "Y2F_kpi_aa", "kpi_aa"]
 
 
 def has_acid(name):
