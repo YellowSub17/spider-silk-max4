@@ -43,6 +43,23 @@ difference:
      result with real suspicion (see the Y2F_kpi_h2o vs kpi_h2o case, where
      an early/late split of kpi_h2o alone reproduced ~75% of the claimed
      peak height).
+  8. Position-matched subtraction (position_matched_diff): stage_positions.py
+     found that the "position N" rotator label is NOT a shared physical
+     location across samples/conditions, that mid-run intensity cycles are
+     genuinely position-locked (position_locking.py), and that at least one
+     flow group's frames are skewed across physical spots relative to its
+     blank. The pooled subtraction above (mean of all protein frames minus
+     mean of all blank frames) therefore silently assumes the two groups
+     sampled the same mix of physical spots -- if they didn't, the "protein"
+     difference partly (or entirely) reflects that position-mix mismatch,
+     not protein structure. This alternative instead averages protein and
+     blank separately WITHIN each shared physical spot, then combines the
+     per-spot differences with equal weight -- removing the position-mix
+     bias by construction -- and separately reports each shared spot's own
+     peak significance (a peak present at only one spot is geometry; one
+     consistent across all shared spots is real). Reported alongside, never
+     replacing, the pooled result above; skipped outright (not forced to a
+     nearest-spot match) when coverage between the two groups is too poor.
 
 Run directly: `python protein_vs_buffer.py`
 Figures are written to ./figures/.
@@ -55,6 +72,8 @@ import numpy as np
 
 import compare_groups as cg
 import src
+import stage_positions as sp
+from position_locking import spot_groups, MIN_FRAMES_PER_SPOT
 
 # (title, protein_group, blank_group) -- blank is the matching protein-free run
 # (same two mixing-channel contents, minus the protein) that isolates the
@@ -146,6 +165,187 @@ def replicate_envelope(qs, Is_p, Is_b, scale=1.0):
     reps_from_protein = Is_p - scale * I_b_mean       # each protein frame vs blank mean
     reps_from_blank = I_p_mean - scale * Is_b         # protein mean vs each blank frame
     return np.vstack([reps_from_protein, reps_from_blank])
+
+
+MIN_SHARED_SPOTS = 2  # need at least this many shared, well-populated spots
+                       # to trust a position-matched result at all
+
+
+def position_matched_diff(protein_name, blank_name, norm="linear_saxs"):
+    """
+    Alternative to the pooled-mean subtraction in analyze_pair(): match
+    protein and blank frames by PHYSICAL stage spot (stage_positions.SPOT_OF)
+    and only compare frames taken at spots BOTH groups actually visited with
+    enough repeats (>= MIN_FRAMES_PER_SPOT each), combining the per-spot
+    differences with equal weight. This removes any bias from the two
+    groups sampling the mixing-channel positions in different proportions
+    (position_locking.py showed the intensity cycle is genuinely
+    position-locked, so such a mismatch would leak straight into a pooled
+    difference).
+
+    Returns None (and prints exactly why) if coverage is too poor to trust
+    -- fewer than MIN_SHARED_SPOTS shared, well-populated spots -- rather
+    than silently falling back to a nearest-spot match. This is expected to
+    happen for at least one real pair in this dataset (Y2F+kpi/aa vs kpi/aa
+    sit at measurably different x, ~0.28 mm apart -- see stage_positions.py
+    -- so they may share zero spots even though both use "position 1-3/5"
+    labels).
+    """
+    protein = cg.load_group(protein_name)
+    blank = cg.load_group(blank_name)
+
+    cg.NORM_METHODS[norm](protein)
+    cg.NORM_METHODS[norm](blank)
+    keep_p = cg.kept_mask(protein)
+    keep_b = cg.kept_mask(blank)
+
+    spots_p = spot_groups(protein, keep_p, list(protein.scan_ids))
+    spots_b = spot_groups(blank, keep_b, list(blank.scan_ids))
+
+    qs = protein.qs
+    Is_p_kept = protein.Is[keep_p]
+    Is_b_kept = blank.Is[keep_b]
+
+    all_spots_p = set(spots_p)
+    all_spots_b = set(spots_b)
+    shared = sorted(
+        s for s in (all_spots_p & all_spots_b)
+        if len(spots_p[s]) >= MIN_FRAMES_PER_SPOT and len(spots_b[s]) >= MIN_FRAMES_PER_SPOT
+    )
+
+    n_frames_p_total, n_frames_b_total = int(keep_p.sum()), int(keep_b.sum())
+    n_frames_p_used = sum(len(spots_p[s]) for s in shared)
+    n_frames_b_used = sum(len(spots_b[s]) for s in shared)
+    discarded_p = sorted(all_spots_p - set(shared))
+    discarded_b = sorted(all_spots_b - set(shared))
+
+    print(f"\n  Position-matched coverage ({protein_name} vs {blank_name}):")
+    print(f"    protein spots: {sorted(all_spots_p)} (kept frames: {n_frames_p_total})")
+    print(f"    blank spots:   {sorted(all_spots_b)} (kept frames: {n_frames_b_total})")
+    print(f"    shared, well-populated spots (n>={MIN_FRAMES_PER_SPOT} both sides): {shared}")
+    if discarded_p:
+        print(f"    discarded (protein-only or under-populated) spots: {discarded_p}")
+    if discarded_b:
+        print(f"    discarded (blank-only or under-populated) spots: {discarded_b}")
+
+    if len(shared) < MIN_SHARED_SPOTS:
+        print(f"    SKIPPED: only {len(shared)} shared spot(s) with enough frames "
+              f"(need >= {MIN_SHARED_SPOTS}). Position-matched subtraction is not "
+              f"trustworthy for this pair -- most likely a systematic x/y offset "
+              f"between the two conditions' stage coordinates (see stage_positions.py). "
+              f"NOT forcing a nearest-spot match.")
+        return None
+
+    frac_p = n_frames_p_used / n_frames_p_total if n_frames_p_total else 0.0
+    frac_b = n_frames_b_used / n_frames_b_total if n_frames_b_total else 0.0
+    print(f"    frames used: protein {n_frames_p_used}/{n_frames_p_total} ({frac_p:.0%}), "
+          f"blank {n_frames_b_used}/{n_frames_b_total} ({frac_b:.0%})")
+
+    per_spot = {}
+    for s in shared:
+        Ip, Ib = Is_p_kept[spots_p[s]], Is_b_kept[spots_b[s]]
+        I_p_mean, I_p_std = Ip.mean(axis=0), Ip.std(axis=0)
+        I_b_mean, I_b_std = Ib.mean(axis=0), Ib.std(axis=0)
+        sem_p = I_p_std / np.sqrt(len(Ip))
+        sem_b = I_b_std / np.sqrt(len(Ib))
+        diff = I_p_mean - I_b_mean
+        diff_err = np.sqrt(sem_p ** 2 + sem_b ** 2)
+        per_spot[s] = {"I_p_mean": I_p_mean, "I_b_mean": I_b_mean,
+                       "diff": diff, "diff_err": diff_err, "n_p": len(Ip), "n_b": len(Ib)}
+
+    # Equal-weight combination across shared spots -- this is what removes
+    # the position-mix bias: each spot counts once, regardless of how many
+    # frames either group happened to collect there.
+    S = len(shared)
+    I_p_matched = np.mean([per_spot[s]["I_p_mean"] for s in shared], axis=0)
+    I_b_matched = np.mean([per_spot[s]["I_b_mean"] for s in shared], axis=0)
+    matched_diff = I_p_matched - I_b_matched
+    matched_diff_err = np.sqrt(np.sum([per_spot[s]["diff_err"] ** 2 for s in shared], axis=0)) / S
+
+    scale = fit_scale_factor(qs, I_p_matched, I_b_matched)
+    matched_diff_scaled = I_p_matched - scale * I_b_matched
+
+    res = resolve_peak(qs, matched_diff, matched_diff_err)
+    res_sc = resolve_peak(qs, matched_diff_scaled, matched_diff_err)
+
+    # Per-spot peak diagnostics -- the key check: does a "peak" appear at
+    # every shared spot (consistent, likely real) or only one/a few
+    # (geometry-dependent, likely a stage-position artifact)?
+    per_spot_peaks = {s: resolve_peak(qs, per_spot[s]["diff"], per_spot[s]["diff_err"]) for s in shared}
+
+    return {
+        "qs": qs, "shared_spots": shared, "per_spot": per_spot, "per_spot_peaks": per_spot_peaks,
+        "I_p_matched": I_p_matched, "I_b_matched": I_b_matched,
+        "matched_diff": matched_diff, "matched_diff_err": matched_diff_err,
+        "matched_diff_scaled": matched_diff_scaled, "scale": scale,
+        "res": res, "res_sc": res_sc,
+        "n_frames_p_used": n_frames_p_used, "n_frames_p_total": n_frames_p_total,
+        "n_frames_b_used": n_frames_b_used, "n_frames_b_total": n_frames_b_total,
+    }
+
+
+def print_matched_summary(matched):
+    if matched is None:
+        return
+    res, res_sc = matched["res"], matched["res_sc"]
+
+    def fmt(label, r):
+        if not r["resolvable"]:
+            print(f"  Matched peak significance ({label}): no resolvable peak above baseline {_flag(False)}")
+        else:
+            print(f"  Matched peak significance ({label}): {r['peak_z']:.1f} sigma {_flag(r['ok'])}")
+
+    fmt("raw", res)
+    fmt(f"scale-corrected, s={matched['scale']:.3f}", res_sc)
+
+    print("  Per-spot peak breakdown (does the peak show up everywhere, or just one spot?):")
+    for s in matched["shared_spots"]:
+        r = matched["per_spot_peaks"][s]
+        x, y = sp.SPOT_COORD.get(s, (np.nan, np.nan))
+        if r["resolvable"]:
+            print(f"    spot {s} (x={x:.3f}, y={y:.3f}): {r['peak_z']:.1f} sigma {_flag(r['ok'])}")
+        else:
+            print(f"    spot {s} (x={x:.3f}, y={y:.3f}): no resolvable peak")
+
+
+def plot_matched(title, protein_name, blank_name, norm, matched, out_dir="figures"):
+    if matched is None:
+        return
+    os.makedirs(out_dir, exist_ok=True)
+    qs = matched["qs"]
+
+    fig, (ax_curve, ax_diff) = plt.subplots(2, 1, figsize=(7, 8), sharex=True,
+                                             gridspec_kw={"height_ratios": [2, 1.3]})
+    ax_curve.plot(qs, matched["I_p_matched"], color="tab:red",
+                  label=f"{protein_name} (position-matched, S={len(matched['shared_spots'])})")
+    ax_curve.plot(qs, matched["I_b_matched"], color="tab:blue",
+                  label=f"{blank_name} (position-matched)")
+    ax_curve.set_xscale("log")
+    ax_curve.set_yscale("log")
+    ax_curve.set_ylabel("Inten. (norm.)")
+    ax_curve.set_xlim(src.det.FULL_QRANGE)
+    ax_curve.set_title(f"{title} -- position-matched")
+    ax_curve.legend(fontsize=8)
+
+    ax_diff.axhline(0, color="k", linewidth=0.8)
+    cmap = plt.colormaps.get_cmap("tab10")
+    for i, s in enumerate(matched["shared_spots"]):
+        ax_diff.plot(qs, matched["per_spot"][s]["diff"], color=cmap(i), alpha=0.5, linewidth=1,
+                     label=f"spot {s} (n_p={matched['per_spot'][s]['n_p']}, "
+                           f"n_b={matched['per_spot'][s]['n_b']})")
+    ax_diff.plot(qs, matched["matched_diff"], color="k", linewidth=2, label="equal-weight matched diff")
+    ax_diff.fill_between(qs, matched["matched_diff"] - matched["matched_diff_err"],
+                          matched["matched_diff"] + matched["matched_diff_err"],
+                          color="k", alpha=0.15, linewidth=0)
+    ax_diff.set_yscale("symlog", linthresh=1e-5)
+    ax_diff.set_xlabel("q [1/A]")
+    ax_diff.set_ylabel("protein - blank\n(position-matched)")
+    ax_diff.legend(fontsize=7, ncol=2)
+    fig.tight_layout()
+
+    out_path = os.path.join(out_dir, title.lower().replace(" ", "_") + f"__{norm}__matched.png")
+    fig.savefig(out_path, dpi=150)
+    print(f"Saved {out_path}")
 
 
 def analyze_pair(title, protein_name, blank_name, norm="linear_saxs", out_dir="figures"):
@@ -320,11 +520,22 @@ def analyze_pair(title, protein_name, blank_name, norm="linear_saxs", out_dir="f
                  " (drift alone produces a peak >=50% the size of the claimed effect -- "
                  "treat the result above with caution)"))
 
+    # --- 8. Position-matched subtraction ---------------------------------------
+    matched = position_matched_diff(protein_name, blank_name, norm=norm)
+    print_matched_summary(matched)
+    plot_matched(title, protein_name, blank_name, norm, matched, out_dir=out_dir)
+
+    matched_peak_z = matched["res"]["peak_z"] if matched and matched["res"]["resolvable"] else np.nan
+    matched_peak_z_sc = matched["res_sc"]["peak_z"] if matched and matched["res_sc"]["resolvable"] else np.nan
+    matched_n_shared = len(matched["shared_spots"]) if matched else 0
+
     return {
         "norm": norm, "cv_p": cv_p, "cv_b": cv_b, "cv_ratio": cv_ratio,
         "scale": scale, "peak_z": peak_z, "resolvable": resolvable,
         "peak_z_scaled": peak_z_sc, "resolvable_scaled": resolvable_sc,
         "drift_frac": drift_frac,
+        "matched_peak_z": matched_peak_z, "matched_peak_z_sc": matched_peak_z_sc,
+        "matched_n_shared": matched_n_shared,
     }
 
 
@@ -342,15 +553,19 @@ def compare_normalizations(title, protein_name, blank_name):
 
     print(f"\n  == {title}: normalization comparison ==")
     header = (f"  {'method':<14}{'scale':>10}{'CV ratio':>12}"
-              f"{'peak sig.':>14}{'scale-corr. peak':>20}{'drift %':>10}")
+              f"{'peak sig.':>14}{'scale-corr. peak':>20}{'drift %':>10}"
+              f"{'matched peak':>15}{'(S spots)':>11}")
     print(header)
     for r in results:
         peak_str = f"{r['peak_z']:.1f} sigma" if r["resolvable"] and np.isfinite(r["peak_z"]) else "n/a"
         peak_sc_str = (f"{r['peak_z_scaled']:.1f} sigma"
                        if r["resolvable_scaled"] and np.isfinite(r["peak_z_scaled"]) else "n/a")
         drift_str = f"{r['drift_frac']:.0%}" if np.isfinite(r["drift_frac"]) else "n/a"
+        matched_str = f"{r['matched_peak_z_sc']:.1f} sigma" if np.isfinite(r["matched_peak_z_sc"]) else "n/a"
+        s_str = f"S={r['matched_n_shared']}" if r["matched_n_shared"] else "skipped"
         print(f"  {r['norm']:<14}{r['scale']:>10.3f}{r['cv_ratio']:>12.2f}"
-              f"{peak_str:>14}{peak_sc_str:>20}{drift_str:>10}")
+              f"{peak_str:>14}{peak_sc_str:>20}{drift_str:>10}"
+              f"{matched_str:>15}{s_str:>11}")
     return results
 
 

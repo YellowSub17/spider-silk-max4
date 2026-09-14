@@ -179,6 +179,47 @@ NORM_METHODS = {
 }
 
 
+# Whether load_group()/drift_check() drop each condition's "first cycle" --
+# the earliest N chronological scans, where N is the number of distinct
+# physical stage spots (stage_positions.spots_of_group) that condition
+# visits -- by default. Motivated by drift_within_runs.py: the first full
+# position cycle of a run is consistently a settling transient (e.g.
+# YR2A_h2o_h2o's total intensity: 12.2, 12.9, 18.6, 18.0, then ~14 for the
+# rest of the run). Override per-call with the skip_first_cycle argument.
+SKIP_FIRST_CYCLE = True
+
+
+def first_cycle_ids(name):
+    """
+    The scan IDs comprising a condition's first full position cycle: the N
+    chronologically-earliest scans, where N = the number of distinct
+    physical stage spots (see stage_positions.py) that condition's scans
+    fall into. Returns [] if that count is 0 or >= the condition's total
+    scan count (nothing sensible to drop).
+
+    Lazily imports stage_positions (which itself imports this module) to
+    avoid a circular import at module load time.
+    """
+    import stage_positions  # noqa: local import, see docstring
+    ids = sorted(GROUPS[name])
+    n_spots = len(stage_positions.spots_of_group(name))
+    if n_spots <= 0 or n_spots >= len(ids):
+        return []
+    return ids[:n_spots]
+
+
+def report_first_cycle_skips():
+    """Print, for every condition in GROUPS, how many scans first_cycle_ids
+    would drop -- i.e. what SKIP_FIRST_CYCLE actually removes per condition."""
+    print(f"{'condition':<20}{'n_total':>9}{'n_spots':>9}{'n_dropped':>11}")
+    import stage_positions
+    for name in GROUPS:
+        n_total = len(GROUPS[name])
+        n_spots = len(stage_positions.spots_of_group(name))
+        dropped = first_cycle_ids(name)
+        print(f"{name:<20}{n_total:>9}{n_spots:>9}{len(dropped):>11}")
+
+
 def load_scan_ids(scan_ids, load_n=1, label=None):
     """Load and combine an arbitrary list of scan IDs, skipping any that fail
     to load (a handful of scans have corrupt/incomplete raw HDF5 groups)."""
@@ -199,36 +240,76 @@ def load_scan_ids(scan_ids, load_n=1, label=None):
     return src.ComboScan(good_ids, load_imgs=False, load_n=load_n)
 
 
-def load_group(name, load_n=1):
-    """Load and combine all scans in a named GROUPS entry."""
-    return load_scan_ids(GROUPS[name], load_n=load_n, label=name)
+def load_group(name, load_n=1, skip_first_cycle=None):
+    """
+    Load and combine all scans in a named GROUPS entry.
+
+    skip_first_cycle (default: SKIP_FIRST_CYCLE) drops that condition's
+    settling-transient first cycle (see first_cycle_ids) BEFORE loading --
+    so the dropped scans are never even read, and every downstream
+    kept_frames/mean_curve call on the resulting ComboScan automatically
+    excludes them without needing its own skip logic.
+    """
+    if skip_first_cycle is None:
+        skip_first_cycle = SKIP_FIRST_CYCLE
+    ids = sorted(GROUPS[name])
+    if skip_first_cycle:
+        dropped = first_cycle_ids(name)
+        if dropped:
+            print(f"  skipping first-cycle settling transient for '{name}': "
+                  f"{len(dropped)} scans {dropped}")
+            ids = [i for i in ids if i not in dropped]
+    return load_scan_ids(ids, load_n=load_n, label=name)
 
 
-def kept_frames(combo, rsq_lim=RSQ_LIM, norm="linear_saxs"):
+def kept_mask(combo, rsq_lim=RSQ_LIM, skip_first_n=0):
+    """
+    Boolean mask (over combo.Is / combo.scan_ids rows, in load order) of
+    frames that pass the streak-quality cut, with skip_first_n additionally
+    excluded. Factored out of kept_frames so callers that need to line up
+    kept frames with their originating scan IDs (e.g. position_locking.py,
+    matching per-frame metrics to stage spots) can get the same mask
+    kept_frames/mean_curve would use, without duplicating the logic.
+    """
+    keep = combo.r_squared > rsq_lim
+    if skip_first_n > 0:
+        keep = keep.copy()
+        keep[:skip_first_n] = False
+    if not np.any(keep):
+        print(f"  warning: no frames passed r_squared > {rsq_lim}, using all frames")
+        keep = np.ones_like(combo.r_squared, dtype=bool)
+    return keep
+
+
+def kept_frames(combo, rsq_lim=RSQ_LIM, norm="linear_saxs", skip_first_n=0):
     """Normalize and return the individual per-frame I(q) curves that pass the
     streak-quality cut (r_squared > rsq_lim), i.e. the replicate curves that
     mean_curve() would otherwise collapse into a single mean+std.
 
     `norm` selects one of NORM_METHODS (default: the original low-q pinning).
 
+    `skip_first_n` additionally excludes the first N frames of the (already
+    chronologically-ordered) combo -- a defensive/manual equivalent of
+    load_group's skip_first_cycle, for combos built without going through
+    load_group (e.g. a manually-supplied scan-id list). When a combo came
+    from load_group with its default skip_first_cycle=True, those frames
+    are already absent and skip_first_n should stay 0 (the default).
+
     Returns qs, Is_kept (n_kept x n_q), n_kept, n_total.
     """
     NORM_METHODS[norm](combo)
-    keep = combo.r_squared > rsq_lim
-    if not np.any(keep):
-        print(f"  warning: no frames passed r_squared > {rsq_lim}, using all frames")
-        keep = np.ones_like(combo.r_squared, dtype=bool)
+    keep = kept_mask(combo, rsq_lim, skip_first_n)
     return combo.qs, combo.Is[keep], keep.sum(), len(keep)
 
 
-def mean_curve(combo, rsq_lim=RSQ_LIM, norm="linear_saxs"):
+def mean_curve(combo, rsq_lim=RSQ_LIM, norm="linear_saxs", skip_first_n=0):
     """Normalize and average I(q) over frames that pass the streak-quality cut.
 
     Returns qs, mean, std, n_kept, n_total. std is the frame-to-frame (run-to-run)
     standard deviation at each q -- i.e. how much the repeats within this group
     disagree with each other, not measurement error on a single frame.
     """
-    qs, Is_kept, n_kept, n_total = kept_frames(combo, rsq_lim, norm=norm)
+    qs, Is_kept, n_kept, n_total = kept_frames(combo, rsq_lim, norm=norm, skip_first_n=skip_first_n)
     return qs, Is_kept.mean(axis=0), Is_kept.std(axis=0), n_kept, n_total
 
 
@@ -250,7 +331,7 @@ DIFF_Q_BASE = ((0.5, 0.7), (1.5, 1.7))
 MIN_SCANS_FOR_DRIFT_CHECK = 20  # need enough scans in each half to be meaningful
 
 
-def drift_check(name, norm="i0", q_base=DIFF_Q_BASE):
+def drift_check(name, norm="i0", q_base=DIFF_Q_BASE, skip_first_cycle=None):
     """
     Split a named group's scans into chronological early/late halves (scan ID
     order is a good proxy for time order here) and run the same
@@ -264,11 +345,22 @@ def drift_check(name, norm="i0", q_base=DIFF_Q_BASE):
     and blank measurements could be producing (or contributing to) that
     signature by itself, rather than real protein structure.
 
+    skip_first_cycle (default: SKIP_FIRST_CYCLE) drops the settling-transient
+    first cycle from the full id list before splitting into early/late, same
+    as load_group -- otherwise the transient itself (which is large and
+    concentrated at the very start) could dominate the "early" half and
+    inflate this check's own result.
+
     Returns dict(scale, peak, n_early, n_late) or None if there aren't enough
     scans in the group to split meaningfully (see MIN_SCANS_FOR_DRIFT_CHECK).
     peak is whatever src.saxs_metrics.peak_analysis returns (or None).
     """
+    if skip_first_cycle is None:
+        skip_first_cycle = SKIP_FIRST_CYCLE
     ids = sorted(GROUPS[name])
+    if skip_first_cycle:
+        dropped = first_cycle_ids(name)
+        ids = [i for i in ids if i not in dropped]
     if len(ids) < MIN_SCANS_FOR_DRIFT_CHECK:
         return None
     half = len(ids) // 2
