@@ -23,6 +23,15 @@ When X-ray scattering data comes off the detector, it's **not ready to compare**
            
            → Looks like 10% difference, but it's just beam intensity!
 
+## Visual: Unnormalized vs. Normalized Comparison
+
+**See `unnormalized_vs_normalized_diagram.svg`** for a side-by-side visual showing:
+- **LEFT**: Unnormalized data (scales differ, signal buried in noise)
+- **RIGHT**: Normalized data (comparable scales, WAXS peak visible)
+- **BOTTOM**: The three normalization methods and their trade-offs
+
+---
+
 ## What Unnormalized Data Looks Like
 
 ### All 6 Protein-vs-Blank Pairs (RAW):

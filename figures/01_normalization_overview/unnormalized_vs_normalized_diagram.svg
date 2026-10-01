@@ -1,0 +1,167 @@
+<svg viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define styles -->
+  <defs>
+    <style>
+      .title { font-size: 24px; font-weight: bold; }
+      .subtitle { font-size: 14px; font-weight: bold; }
+      .label { font-size: 12px; }
+      .small { font-size: 11px; }
+      .axis-label { font-size: 13px; font-weight: bold; }
+      .protein { stroke: #d62728; stroke-width: 3; fill: none; }
+      .blank { stroke: #1f77b4; stroke-width: 3; fill: none; }
+      .protein-fill { fill: #d62728; opacity: 0.2; }
+      .blank-fill { fill: #1f77b4; opacity: 0.2; }
+      .grid { stroke: #ddd; stroke-width: 0.5; }
+      .arrow { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .highlight { fill: #fff59d; opacity: 0.3; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#333" />
+    </marker>
+  </defs>
+
+  <!-- TITLE -->
+  <text x="600" y="35" text-anchor="middle" class="title">UNNORMALIZED vs. NORMALIZED Data: Why Normalization Matters</text>
+
+  <!-- ===== LEFT SIDE: UNNORMALIZED ===== -->
+  <g id="unnormalized">
+    <!-- Background box -->
+    <rect x="20" y="60" width="550" height="600" fill="#ffe6e6" opacity="0.3" rx="5" stroke="#d62728" stroke-width="2" stroke-dasharray="5,5"/>
+
+    <!-- Title -->
+    <text x="300" y="90" text-anchor="middle" class="subtitle">UNNORMALIZED Raw Data (Useless)</text>
+
+    <!-- Axes -->
+    <line x1="80" y1="520" x2="480" y2="520" stroke="black" stroke-width="2"/>
+    <line x1="80" y1="520" x2="80" y2="150" stroke="black" stroke-width="2"/>
+    <text x="280" y="560" text-anchor="middle" class="axis-label">q [1/Å]</text>
+    <text x="40" y="330" text-anchor="middle" class="axis-label" transform="rotate(-90, 40, 330)">Intensity (counts)</text>
+
+    <!-- Grid lines -->
+    <line x1="80" y1="450" x2="480" y2="450" class="grid"/>
+    <line x1="80" y1="380" x2="480" y2="380" class="grid"/>
+    <line x1="80" y1="310" x2="480" y2="310" class="grid"/>
+    <line x1="80" y1="240" x2="480" y2="240" class="grid"/>
+
+    <!-- Scale labels -->
+    <text x="70" y="525" text-anchor="end" class="small">0</text>
+    <text x="70" y="460" text-anchor="end" class="small">5k</text>
+    <text x="70" y="390" text-anchor="end" class="small">10k</text>
+    <text x="70" y="320" text-anchor="end" class="small">15k</text>
+    <text x="70" y="250" text-anchor="end" class="small">20k</text>
+    <text x="70" y="180" text-anchor="end" class="small">25k</text>
+
+    <!-- Protein curve (unnormalized, high scatter) -->
+    <path class="protein" d="M 100,480 Q 150,420 200,350 T 300,240 T 400,180 T 480,150"/>
+    <path class="protein-fill" d="M 100,480 Q 150,420 200,350 T 300,240 T 400,180 T 480,150 L 480,520 Q 400,500 300,480 T 100,500 Z"/>
+
+    <!-- Blank curve (unnormalized, high scatter) -->
+    <path class="blank" d="M 100,510 Q 150,460 200,390 T 300,280 T 400,210 T 480,170"/>
+    <path class="blank-fill" d="M 100,510 Q 150,460 200,390 T 300,280 T 400,210 T 480,170 L 480,520 Q 400,510 300,500 T 100,520 Z"/>
+
+    <!-- Legend -->
+    <line x1="100" y1="130" x2="130" y2="130" class="protein"/>
+    <text x="140" y="135" class="label">Protein (n=115 frames)</text>
+
+    <line x1="100" y1="110" x2="130" y2="110" class="blank"/>
+    <text x="140" y="115" class="label">Blank (n=139 frames)</text>
+
+    <!-- Problem description -->
+    <rect x="85" y="75" width="400" height="35" fill="white" stroke="#d62728" stroke-width="1.5" rx="3"/>
+    <text x="285" y="93" text-anchor="middle" class="small" font-weight="bold">Problem: Beam fluctuation &amp; geometry hide signal</text>
+
+    <!-- Problem annotations -->
+    <text x="100" y="620" class="small" font-weight="bold">Issues:</text>
+    <text x="100" y="640" class="small">✗ Beam intensity varies 10-30%</text>
+    <text x="100" y="658" class="small">✗ Sample position shifts scales</text>
+    <text x="100" y="676" class="small">✗ Protein signal (1-2%) buried in noise</text>
+  </g>
+
+  <!-- ===== RIGHT SIDE: NORMALIZED ===== -->
+  <g id="normalized">
+    <!-- Background box -->
+    <rect x="630" y="60" width="550" height="600" fill="#e6f2ff" opacity="0.3" rx="5" stroke="#1f77b4" stroke-width="2"/>
+
+    <!-- Title -->
+    <text x="910" y="90" text-anchor="middle" class="subtitle">NORMALIZED Data (Comparable)</text>
+
+    <!-- Axes -->
+    <line x1="690" y1="520" x2="1090" y2="520" stroke="black" stroke-width="2"/>
+    <line x1="690" y1="520" x2="690" y2="150" stroke="black" stroke-width="2"/>
+    <text x="890" y="560" text-anchor="middle" class="axis-label">q [1/Å]</text>
+    <text x="650" y="330" text-anchor="middle" class="axis-label" transform="rotate(-90, 650, 330)">Normalized Intensity</text>
+
+    <!-- Grid lines -->
+    <line x1="690" y1="450" x2="1090" y2="450" class="grid"/>
+    <line x1="690" y1="380" x2="1090" y2="380" class="grid"/>
+    <line x1="690" y1="310" x2="1090" y2="310" class="grid"/>
+    <line x1="690" y1="240" x2="1090" y2="240" class="grid"/>
+
+    <!-- Scale labels -->
+    <text x="680" y="525" text-anchor="end" class="small">0</text>
+    <text x="680" y="460" text-anchor="end" class="small">10</text>
+    <text x="680" y="390" text-anchor="end" class="small">20</text>
+    <text x="680" y="320" text-anchor="end" class="small">30</text>
+    <text x="680" y="250" text-anchor="end" class="small">40</text>
+    <text x="680" y="180" text-anchor="end" class="small">50</text>
+
+    <!-- Normalized protein curve (cleaner, shows signal) -->
+    <path class="protein" d="M 710,470 Q 760,410 810,340 T 910,230 T 1010,160 T 1090,140"/>
+    <path class="protein-fill" d="M 710,470 Q 760,410 810,340 T 910,230 T 1010,160 T 1090,140 L 1090,520 Q 1010,500 910,480 T 710,500 Z"/>
+
+    <!-- Normalized blank curve (cleaner) -->
+    <path class="blank" d="M 710,490 Q 760,440 810,370 T 910,260 T 1010,190 T 1090,160"/>
+    <path class="blank-fill" d="M 710,490 Q 760,440 810,370 T 910,260 T 1010,190 T 1090,160 L 1090,520 Q 1010,510 910,500 T 710,510 Z"/>
+
+    <!-- Highlight the difference region (WAXS) -->
+    <rect x="900" y="130" width="100" height="390" class="highlight" rx="3"/>
+    <text x="950" y="145" text-anchor="middle" class="small" font-weight="bold" fill="#ff6b00">WAXS Peak</text>
+    <text x="950" y="160" text-anchor="middle" class="small" fill="#ff6b00">visible here</text>
+
+    <!-- Legend -->
+    <line x1="710" y1="130" x2="740" y2="130" class="protein"/>
+    <text x="750" y="135" class="label">Protein (n=115 frames)</text>
+
+    <line x1="710" y1="110" x2="740" y2="110" class="blank"/>
+    <text x="750" y="115" class="label">Blank (n=139 frames)</text>
+
+    <!-- Solution description -->
+    <rect x="695" y="75" width="400" height="35" fill="white" stroke="#1f77b4" stroke-width="1.5" rx="3"/>
+    <text x="895" y="93" text-anchor="middle" class="small" font-weight="bold">Solution: Remove instrumental noise via normalization</text>
+
+    <!-- Benefits -->
+    <text x="710" y="620" class="small" font-weight="bold">Benefits:</text>
+    <text x="710" y="640" class="small">✓ Scales are now comparable</text>
+    <text x="710" y="658" class="small">✓ Real protein signal emerges</text>
+    <text x="710" y="676" class="small">✓ WAXS peak clearly visible (10.5σ)</text>
+  </g>
+
+  <!-- ===== BOTTOM: The Three Normalization Methods ===== -->
+  <g id="methods" transform="translate(0, 680)">
+    <text x="600" y="0" text-anchor="middle" class="subtitle">Three Normalization Strategies</text>
+
+    <!-- Method 1: i0 -->
+    <rect x="20" y="20" width="350" height="80" fill="#fff9e6" stroke="#ff9800" stroke-width="1.5" rx="3"/>
+    <text x="195" y="45" text-anchor="middle" class="label" font-weight="bold">1. i0 (Incident Flux)</text>
+    <text x="30" y="65" class="small">Divide by beam intensity</text>
+    <text x="30" y="80" class="small" fill="#555">✓ Most model-independent</text>
+    <text x="30" y="95" class="small" fill="#555">✓ Removes beam fluctuation only</text>
+
+    <!-- Method 2: linear_saxs -->
+    <rect x="425" y="20" width="350" height="80" fill="#ffe6f0" stroke="#c2185b" stroke-width="1.5" rx="3"/>
+    <text x="600" y="45" text-anchor="middle" class="label" font-weight="bold">2. linear_saxs (Low-q)</text>
+    <text x="435" y="65" class="small">Normalize to q=0.005-0.015 Å⁻¹</text>
+    <text x="435" y="80" class="small" fill="#555">⚠ Assumes low-q identical</text>
+    <text x="435" y="95" class="small" fill="#555">✗ May over-correct if protein changes</text>
+
+    <!-- Method 3: neutral -->
+    <rect x="830" y="20" width="350" height="80" fill="#f0e6ff" stroke="#7c3aed" stroke-width="1.5" rx="3"/>
+    <text x="1005" y="45" text-anchor="middle" class="label" font-weight="bold">3. neutral (Mid-q)</text>
+    <text x="840" y="65" class="small">Normalize to q=0.1-1.0 Å⁻¹</text>
+    <text x="840" y="80" class="small" fill="#555">✓ Assumes mid-q is solvent-dominated</text>
+    <text x="840" y="95" class="small" fill="#555">✓ Safer; doesn't hide low-q changes</text>
+  </g>
+
+  <!-- Citation -->
+  <text x="1180" y="690" text-anchor="end" class="small" fill="#999">See README_UNNORMALIZED.md for detailed explanation</text>
+</svg>
