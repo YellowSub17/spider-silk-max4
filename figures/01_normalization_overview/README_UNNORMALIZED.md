@@ -144,21 +144,38 @@ Result: Cleaner comparison; no assumptions about low-q
 
 ---
 
-## Generating the Unnormalized Plot
+## The Figures in This Folder
 
-### Option A: Use Existing Figures
-The figures in this folder (`sample_blank_curves__i0.png`, `sample_blank_curves__linear_saxs.png`, `sample_blank_curves__neutral.png`) already show **normalized** curves. To see **unnormalized** curves, you would need to run:
+All plots are generated from `protein_vs_buffer.py`, which includes integrated functions for plotting both normalized and unnormalized data using consistent styling:
+
+**Raw/Unnormalized figures:**
+- `sample_blank_curves__raw_unnormalized.png` — All 6 pairs without any normalization
+  - Shows why normalization is critical: curves almost completely overlap
+  - Demonstrates that protein signal is invisible in raw data
+  
+- `y2f_h2o_kpi_vs_kpi_h2o_blank__normalization_comparison.png` — Strongest signal pair in all 4 states
+  - Panel 1: RAW (unnormalized) with very different scales
+  - Panel 2: linear_saxs normalized
+  - Panel 3: neutral normalized  
+  - Panel 4: i0 normalized
+  - Shows the dramatic transformation that makes protein signal visible
+
+**Normalized figures (for comparison across methods):**
+- `sample_blank_curves__i0.png` — All 6 pairs, i0 normalized
+- `sample_blank_curves__linear_saxs.png` — All 6 pairs, linear_saxs normalized
+- `sample_blank_curves__neutral.png` — All 6 pairs, neutral normalized
+
+## Regenerating These Plots
+
+To regenerate all unnormalized and normalization comparison plots, run:
 
 ```bash
-python3 /path/to/spider-silk-max4/plot_unnormalized.py
+cd /path/to/spider-silk-max4
+source venv/bin/activate
+python protein_vs_buffer.py
 ```
 
-This generates:
-- `sample_blank_curves__raw_unnormalized.png` — All 6 pairs in raw state
-- `normalization_comparison__y2f_h2o_kpi.png` — One pair in all 4 states (side-by-side)
-
-### Option B: Manual Inspection
-The raw intensity data is in the HDF5 files under `data/raw/scan-<id>*.h5` and `data/process/azint/scan-<id>*_integrated.h5`. If you load and plot these without any normalization, you'll see the scaling differences immediately.
+The plots will be saved to `figures/` and the unnormalized plots will be moved to `figures/01_normalization_overview/`
 
 ---
 
